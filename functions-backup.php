@@ -1,5 +1,5 @@
 <?php
-// FUNCTIONS.PHP RESTAURADO - VERSÃO COMPLETA
+// BACKUP DO FUNCTIONS.PHP ORIGINAL
 // Este arquivo contém a versão original que estava funcionando
 
 $template_diretorio = get_template_directory();

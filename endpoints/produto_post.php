@@ -1,128 +1,129 @@
 <?php
 
 function api_produto_post($request) {
-  $user = wp_get_current_user();
-  $user_id = $user->ID;
-
-  if($user_id > 0) {
-    // Validação dos campos obrigatórios
-    $campos_obrigatorios = ['referencia', 'nome', 'descricao', 'preco', 'categorias'];
-    foreach ($campos_obrigatorios as $campo) {
-      if (empty($request[$campo])) {
-        return new WP_Error('campo_obrigatorio', "Campo '$campo' é obrigatório.", array('status' => 400));
-      }
-    }
-
-    // Sanitização dos dados
-    $referencia = sanitize_text_field($request['referencia']);
-    $nome = sanitize_text_field($request['nome']);
-    $descricao = sanitize_textarea_field($request['descricao']);
-    $preco = floatval($request['preco']);
-    $categorias = sanitize_text_field($request['categorias']);
-    $informacoes_adicionais = isset($request['informacoes_adicionais']) ? 
-      sanitize_textarea_field($request['informacoes_adicionais']) : '';
-    
-    // Validação do preço
-    if ($preco <= 0) {
-      return new WP_Error('preco_invalido', 'Preço deve ser maior que zero.', array('status' => 400));
-    }
-
-    // Verificar se a referência já existe
-    $produto_existente = get_posts(array(
-      'post_type' => 'produto',
-      'meta_query' => array(
-        array(
-          'key' => 'referencia',
-          'value' => $referencia,
-          'compare' => '='
-        )
-      ),
-      'numberposts' => 1
-    ));
-
-    if (!empty($produto_existente)) {
-      return new WP_Error('referencia_existente', 'Referência já cadastrada.', array('status' => 409));
-    }
-
-    // Processar cores
-    $cores = array();
-    if (isset($request['cores']) && is_array($request['cores'])) {
-      foreach ($request['cores'] as $cor) {
-        $cores[] = array(
-          'nome' => sanitize_text_field($cor['nome']),
-          'imagem' => isset($cor['imagem']) ? esc_url_raw($cor['imagem']) : '',
-          'codigo' => isset($cor['codigo']) ? sanitize_text_field($cor['codigo']) : '',
-          'tipo' => sanitize_text_field($cor['tipo']),
-          'codigoNumerico' => sanitize_text_field($cor['codigoNumerico'])
-        );
-      }
-    }
-
-    // Processar imagens
-    $imagens = array();
-    if (isset($request['imagens']) && is_array($request['imagens'])) {
-      foreach ($request['imagens'] as $imagem) {
-        $imagens[] = esc_url_raw($imagem);
-      }
-    }
-
-    // Criar o produto
-    $response = array(
-      'post_author' => $user_id,
-      'post_type' => 'produto',
-      'post_title' => $nome,
-      'post_content' => $descricao,
-      'post_status' => 'publish',
-      'meta_input' => array(
-        'referencia' => $referencia,
-        'descricao' => $descricao,
-        'cores' => json_encode($cores, JSON_UNESCAPED_UNICODE),
-        'imagens' => json_encode($imagens, JSON_UNESCAPED_UNICODE),
-        'categorias' => $categorias,
-        'informacoes_adicionais' => $informacoes_adicionais,
-        'preco' => $preco,
-        'usuario_id' => $user->user_login,
-        'vendido' => 'false',
-      ),
-    );
-
-    $produto_id = wp_insert_post($response);
-    
-    if (is_wp_error($produto_id)) {
-      return $produto_id;
-    }
-
-    // Processar upload de arquivos de imagem
-    $files = $request->get_file_params();
-    if($files) {
-      require_once(ABSPATH . 'wp-admin/includes/image.php');
-      require_once(ABSPATH . 'wp-admin/includes/file.php');
-      require_once(ABSPATH . 'wp-admin/includes/media.php');
-
-      $imagens_upload = array();
-      foreach ($files as $file => $array) {
-        $attachment_id = media_handle_upload($file, $produto_id);
-        if (!is_wp_error($attachment_id)) {
-          $imagens_upload[] = wp_get_attachment_url($attachment_id);
-        }
-      }
-      
-      // Atualizar metadados com as imagens enviadas
-      if (!empty($imagens_upload)) {
-        update_post_meta($produto_id, 'imagens_upload', json_encode($imagens_upload));
-      }
-    }
-
-    // Retornar resposta com ID do produto
-    $response['id'] = $produto_id;
-    $response['slug'] = get_post_field('post_name', $produto_id);
-    $response['status'] = 'success';
-    $response['message'] = 'Produto criado com sucesso';
-
-  } else {
-    $response = new WP_Error('permissao', 'Usuário não possui permissão.', array('status' => 401));
+  // Verificar autenticação via middleware
+  $usuario = obter_usuario_autenticado($request);
+  
+  if (!$usuario) {
+    return new WP_Error('nao_autenticado', 'Usuário não autenticado.', array('status' => 401));
   }
   
+  $user_id = $usuario->ID;
+  
+  // Validação dos campos obrigatórios
+  $campos_obrigatorios = ['referencia', 'nome', 'descricao', 'preco', 'categorias'];
+  foreach ($campos_obrigatorios as $campo) {
+    if (empty($request[$campo])) {
+      return new WP_Error('campo_obrigatorio', "Campo '$campo' é obrigatório.", array('status' => 400));
+    }
+  }
+
+  // Sanitização dos dados
+  $referencia = sanitize_text_field($request['referencia']);
+  $nome = sanitize_text_field($request['nome']);
+  $descricao = sanitize_textarea_field($request['descricao']);
+  $preco = floatval($request['preco']);
+  $categorias = sanitize_text_field($request['categorias']);
+  $informacoes_adicionais = isset($request['informacoes_adicionais']) ? 
+    sanitize_textarea_field($request['informacoes_adicionais']) : '';
+  
+  // Validação do preço
+  if ($preco <= 0) {
+    return new WP_Error('preco_invalido', 'Preço deve ser maior que zero.', array('status' => 400));
+  }
+
+  // Verificar se a referência já existe
+  $produto_existente = get_posts(array(
+    'post_type' => 'produto',
+    'meta_query' => array(
+      array(
+        'key' => 'referencia',
+        'value' => $referencia,
+        'compare' => '='
+      )
+    ),
+    'numberposts' => 1
+  ));
+
+  if (!empty($produto_existente)) {
+    return new WP_Error('referencia_existente', 'Referência já cadastrada.', array('status' => 409));
+  }
+
+  // Processar cores
+  $cores = array();
+  if (isset($request['cores']) && is_array($request['cores'])) {
+    foreach ($request['cores'] as $cor) {
+      $cores[] = array(
+        'nome' => sanitize_text_field($cor['nome']),
+        'imagem' => isset($cor['imagem']) ? esc_url_raw($cor['imagem']) : '',
+        'codigo' => isset($cor['codigo']) ? sanitize_text_field($cor['codigo']) : '',
+        'tipo' => sanitize_text_field($cor['tipo']),
+        'codigoNumerico' => sanitize_text_field($cor['codigoNumerico'])
+      );
+    }
+  }
+
+  // Processar imagens
+  $imagens = array();
+  if (isset($request['imagens']) && is_array($request['imagens'])) {
+    foreach ($request['imagens'] as $imagem) {
+      $imagens[] = esc_url_raw($imagem);
+    }
+  }
+
+  // Criar o produto
+  $response = array(
+    'post_author' => $user_id,
+    'post_type' => 'produto',
+    'post_title' => $nome,
+    'post_content' => $descricao,
+    'post_status' => 'publish',
+    'meta_input' => array(
+      'referencia' => $referencia,
+      'descricao' => $descricao,
+      'cores' => json_encode($cores, JSON_UNESCAPED_UNICODE),
+      'imagens' => json_encode($imagens, JSON_UNESCAPED_UNICODE),
+      'categorias' => $categorias,
+      'informacoes_adicionais' => $informacoes_adicionais,
+      'preco' => $preco,
+      'usuario_id' => $usuario->user_login,
+      'vendido' => 'false',
+    ),
+  );
+
+  $produto_id = wp_insert_post($response);
+  
+  if (is_wp_error($produto_id)) {
+    return $produto_id;
+  }
+
+  // Processar upload de arquivos de imagem
+  $files = $request->get_file_params();
+  if($files) {
+    require_once(ABSPATH . 'wp-admin/includes/image.php');
+    require_once(ABSPATH . 'wp-admin/includes/file.php');
+    require_once(ABSPATH . 'wp-admin/includes/media.php');
+
+    $imagens_upload = array();
+    foreach ($files as $file => $array) {
+      $attachment_id = media_handle_upload($file, $produto_id);
+      if (!is_wp_error($attachment_id)) {
+        $imagens_upload[] = wp_get_attachment_url($attachment_id);
+      }
+    }
+    
+    // Atualizar metadados com as imagens enviadas
+    if (!empty($imagens_upload)) {
+      update_post_meta($produto_id, 'imagens_upload', json_encode($imagens_upload));
+    }
+  }
+
+  // Retornar resposta com ID do produto
+  $response['id'] = $produto_id;
+  $response['slug'] = get_post_field('post_name', $produto_id);
+  $response['status'] = 'success';
+  $response['message'] = 'Produto criado com sucesso';
+
   return rest_ensure_response($response);
 }
 

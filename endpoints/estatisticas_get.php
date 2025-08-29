@@ -1,12 +1,14 @@
 <?php
 
 function api_estatisticas_get($request) {
-  $user = wp_get_current_user();
-  $user_id = $user->ID;
-
-  if($user_id <= 0) {
-    return new WP_Error('permissao', 'Usuário não possui permissão.', array('status' => 401));
+  // Verificar autenticação via middleware
+  $usuario = obter_usuario_autenticado($request);
+  
+  if (!$usuario) {
+    return new WP_Error('nao_autenticado', 'Usuário não autenticado.', array('status' => 401));
   }
+  
+  $user_id = $usuario->ID;
 
   $tipo = isset($request['tipo']) ? sanitize_text_field($request['tipo']) : 'geral';
   $periodo = isset($request['periodo']) ? sanitize_text_field($request['periodo']) : '30dias';

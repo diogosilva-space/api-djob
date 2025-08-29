@@ -43,7 +43,7 @@ function api_transacao_get($request) {
       );
     }
   } else {
-    $response = new WP_error('permissao', 'Usuário não possui permissão.', array('status' => 401));
+    $response = new WP_Error('permissao', 'Usuário não possui permissão.', array('status' => 401));
   }
   return rest_ensure_response($response);
 }

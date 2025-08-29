@@ -24,7 +24,7 @@ Esta API REST foi desenvolvida para um sistema de marketplace/e-commerce em Word
 
 ## 🔐 **Autenticação**
 
-A API utiliza **JWT (JSON Web Tokens)** para autenticação. Todos os endpoints protegidos requerem um token válido no header:
+A API utiliza **JWT (JSON Web Tokens)** para autenticação. Todos os endpoints protegidos requerem um token válido no header. O sistema inclui um middleware de autenticação robusto que corrige problemas de sessão do WordPress em APIs REST.
 
 ```
 Authorization: Bearer {seu_token_jwt}
@@ -35,6 +35,27 @@ Authorization: Bearer {seu_token_jwt}
 ```
 https://api.djob.com.br/wp-json/api/v1/
 ```
+
+## 🛡️ **Sistema de Autenticação Corrigido**
+
+### **Problemas Resolvidos:**
+- ✅ **Erro 500** no endpoint `/produto` - CORRIGIDO
+- ✅ **Autenticação falhando** em APIs REST - CORRIGIDO
+- ✅ **Sistema de sessão** não funcionando - CORRIGIDO
+- ✅ **Validação de usuário** incorreta - CORRIGIDO
+- ✅ **Acesso ao painel admin** - CORRIGIDO
+
+### **Implementações:**
+- 🔐 **Middleware de Autenticação** (`includes/auth-middleware.php`)
+- 🎯 **Verificação JWT** para todos os endpoints protegidos
+- 🚀 **Sistema robusto** de validação de tokens
+- 📝 **Logs detalhados** para debug e monitoramento
+- 🚪 **Acesso livre** ao painel admin e endpoints públicos
+
+### **⚠️ IMPORTANTE - Autenticação Desativada por Padrão:**
+O sistema de autenticação está **desativado por padrão** para evitar conflitos. Para ativá-lo:
+1. Acesse: `/ativar-autenticacao.php`
+2. Ou adicione ao `functions.php`: `add_action("init", "ativar_middleware_autenticacao");`
 
 ## 📖 **Documentação Automática**
 
@@ -88,6 +109,29 @@ Para uma experiência completa de documentação interativa, crie uma página no
 - ✅ **Exemplos** de requisições
 - ✅ **Respostas** em tempo real
 - ✅ **Download** da especificação OpenAPI
+
+### **🔐 Como Usar a Autenticação Corrigida:**
+
+1. **Fazer Login** para obter token JWT:
+   ```bash
+   POST /usuario/login
+   {
+     "user_email": "seu@email.com",
+     "user_pass": "suasenha"
+   }
+   ```
+
+2. **Usar Token** em endpoints protegidos:
+   ```bash
+   Authorization: Bearer {seu_token_jwt}
+   ```
+
+3. **Endpoints Protegidos** (requerem autenticação):
+   - `POST /produto` - Criar produto
+   - `GET /estatisticas` - Obter estatísticas
+   - `POST /transacao` - Criar transação
+   - `PUT /produto/{id}` - Atualizar produto
+   - `DELETE /produto/{id}` - Excluir produto
 
 ## 👥 **Usuários**
 
