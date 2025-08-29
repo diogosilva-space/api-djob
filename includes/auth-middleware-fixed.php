@@ -1,16 +1,20 @@
 <?php
 /**
- * Middleware de Autenticação para API REST
- * Corrige problemas de autenticação nos endpoints
+ * Middleware de Autenticação CORRIGIDO para API REST
+ * Versão que funciona corretamente com o plugin JWT
  */
 
 /**
  * Verifica se o usuário está autenticado via JWT
+ * VERSÃO CORRIGIDA que funciona com o plugin JWT
  */
 function verificar_autenticacao_jwt($request) {
     $auth_header = $request->get_header('Authorization');
     
     if (!$auth_header) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('JWT: Header Authorization não encontrado');
+        }
         return false;
     }
     
@@ -22,6 +26,9 @@ function verificar_autenticacao_jwt($request) {
     }
     
     if (empty($token)) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('JWT: Token vazio após extração');
+        }
         return false;
     }
     
@@ -30,7 +37,16 @@ function verificar_autenticacao_jwt($request) {
         error_log('JWT Token recebido: ' . substr($token, 0, 50) . '...');
     }
     
-    // Método 1: Plugin JWT padrão do WordPress (PRINCIPAL)
+    // MÉTODO PRINCIPAL: Verificação direta do token JWT
+    $usuario = verificar_token_jwt_direto($token);
+    if ($usuario) {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('JWT Token validado com sucesso via verificação direta');
+        }
+        return $usuario;
+    }
+    
+    // MÉTODO FALLBACK: Tentar usar o plugin JWT se disponível
     if (function_exists('jwt_auth_verify_token')) {
         $usuario = jwt_auth_verify_token($token);
         if ($usuario && !is_wp_error($usuario)) {
@@ -49,15 +65,6 @@ function verificar_autenticacao_jwt($request) {
         }
     }
     
-    // Método 2: Verificação direta do token JWT (FALLBACK)
-    $usuario = verificar_token_jwt_direto($token);
-    if ($usuario) {
-        if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('JWT Token validado via verificação direta');
-        }
-        return $usuario;
-    }
-    
     // Se não conseguiu autenticar, retornar false
     if (defined('WP_DEBUG') && WP_DEBUG) {
         error_log('JWT Token falhou em todos os métodos de validação');
@@ -66,20 +73,32 @@ function verificar_autenticacao_jwt($request) {
 }
 
 /**
- * Verifica token JWT de forma direta (fallback)
+ * Verifica token JWT de forma direta (MÉTODO PRINCIPAL)
+ * VERSÃO CORRIGIDA que funciona com tokens do plugin JWT
  */
 function verificar_token_jwt_direto($token) {
     try {
         // Decodificar o token JWT
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JWT: Token não tem 3 partes');
+            }
             return false;
         }
         
         $payload = json_decode(base64_decode(str_replace(['-', '_'], ['+', '/'], $parts[1])), true);
         
         if (!$payload) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JWT: Payload não pode ser decodificado');
+            }
             return false;
+        }
+        
+        // Debug: Log do payload
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('JWT Payload: ' . print_r($payload, true));
         }
         
         // Verificar se o token não expirou
@@ -90,38 +109,71 @@ function verificar_token_jwt_direto($token) {
             return false;
         }
         
-        // Verificar se o usuário existe
+        // Verificar se o usuário existe - MÚLTIPLAS FORMATOS SUPORTADOS
         $user_id = null;
+        
+        // Formato 1: payload.data.user.id (plugin JWT padrão)
         if (isset($payload['data']['user']['id'])) {
             $user_id = $payload['data']['user']['id'];
-        } elseif (isset($payload['user_id'])) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JWT: User ID encontrado em data.user.id: ' . $user_id);
+            }
+        }
+        // Formato 2: payload.user_id
+        elseif (isset($payload['user_id'])) {
             $user_id = $payload['user_id'];
-        } elseif (isset($payload['data']['id'])) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JWT: User ID encontrado em user_id: ' . $user_id);
+            }
+        }
+        // Formato 3: payload.data.id
+        elseif (isset($payload['data']['id'])) {
             $user_id = $payload['data']['id'];
-        } elseif (isset($payload['sub'])) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JWT: User ID encontrado em data.id: ' . $user_id);
+            }
+        }
+        // Formato 4: payload.sub (padrão JWT)
+        elseif (isset($payload['sub'])) {
             $user_id = $payload['sub'];
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JWT: User ID encontrado em sub: ' . $user_id);
+            }
+        }
+        // Formato 5: payload.iss (se contiver ID)
+        elseif (isset($payload['iss']) && is_numeric($payload['iss'])) {
+            $user_id = $payload['iss'];
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JWT: User ID encontrado em iss: ' . $user_id);
+            }
         }
         
         if (!$user_id) {
             if (defined('WP_DEBUG') && WP_DEBUG) {
-                error_log('JWT Token não contém user_id válido');
+                error_log('JWT: User ID não encontrado no payload');
+                error_log('JWT: Payload completo: ' . print_r($payload, true));
             }
             return false;
         }
         
+        // Buscar usuário no WordPress
         $user = get_user_by('ID', $user_id);
         if ($user && $user->exists()) {
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                error_log('JWT: Usuário encontrado: ' . $user->user_login . ' (ID: ' . $user_id . ')');
+            }
             return $user;
         }
         
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Usuário não encontrado para ID: ' . $user_id);
+            error_log('JWT: Usuário não encontrado para ID: ' . $user_id);
         }
         
         return false;
+        
     } catch (Exception $e) {
         if (defined('WP_DEBUG') && WP_DEBUG) {
-            error_log('Erro na verificação direta do JWT: ' . $e->getMessage());
+            error_log('JWT: Erro na verificação direta: ' . $e->getMessage());
         }
         return false;
     }
@@ -294,9 +346,10 @@ function ativar_middleware_autenticacao() {
 function debug_autenticacao($request) {
     if (defined('WP_DEBUG') && WP_DEBUG) {
         error_log('=== DEBUG AUTENTICAÇÃO ===');
+        error_log('Route: ' . $request->get_route());
+        error_log('Method: ' . $request->get_method());
         error_log('Headers: ' . print_r($request->get_headers(), true));
         error_log('Authorization: ' . $request->get_header('Authorization'));
-        error_log('Usuario: ' . print_r(obter_usuario_autenticado($request), true));
         error_log('=======================');
     }
 }

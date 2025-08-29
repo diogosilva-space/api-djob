@@ -69,8 +69,14 @@ function api_usuario_login($request) {
     ),
     'data_login' => current_time('c'),
     'token_info' => array(
-      'note' => 'Use o token JWT do WordPress para autenticação em endpoints protegidos',
-      'endpoint' => '/wp-json/jwt-auth/v1/token'
+      'note' => 'Use o endpoint JWT padrão do WordPress para obter token de autenticação',
+      'endpoint' => '/wp-json/jwt-auth/v1/token',
+      'method' => 'POST',
+      'params' => array(
+        'username' => $user->user_login,
+        'password' => $user_pass
+      ),
+      'example' => 'curl -X POST "https://api.djob.com.br/wp-json/jwt-auth/v1/token" -H "Content-Type: application/json" -d \'{"username":"' . $user->user_login . '","password":"' . $user_pass . '"}\''
     )
   );
 

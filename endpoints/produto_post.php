@@ -72,7 +72,7 @@ function api_produto_post($request) {
   }
 
   // Criar o produto
-  $response = array(
+  $post_data = array(
     'post_author' => $user_id,
     'post_type' => 'produto',
     'post_title' => $nome,
@@ -91,7 +91,7 @@ function api_produto_post($request) {
     ),
   );
 
-  $produto_id = wp_insert_post($response);
+  $produto_id = wp_insert_post($post_data);
   
   if (is_wp_error($produto_id)) {
     return $produto_id;
@@ -119,12 +119,14 @@ function api_produto_post($request) {
   }
 
   // Retornar resposta com ID do produto
-  $response['id'] = $produto_id;
-  $response['slug'] = get_post_field('post_name', $produto_id);
-  $response['status'] = 'success';
-  $response['message'] = 'Produto criado com sucesso';
+  $response_data = array(
+    'id' => $produto_id,
+    'slug' => get_post_field('post_name', $produto_id),
+    'status' => 'success',
+    'message' => 'Produto criado com sucesso'
+  );
 
-  return rest_ensure_response($response);
+  return rest_ensure_response($response_data);
 }
 
 function registrar_api_produto_post() {
