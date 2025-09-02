@@ -42,6 +42,9 @@ function registrar_api_transacao_post() {
     array(
       'methods' => WP_REST_Server::CREATABLE,
       'callback' => 'api_transacao_post',
+      'permission_callback' => function() {
+        return is_user_logged_in();
+      },
     ),
   ));
 }

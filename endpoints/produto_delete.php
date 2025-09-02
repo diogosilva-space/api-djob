@@ -31,6 +31,9 @@ function registrar_api_produto_delete() {
     array(
       'methods' => WP_REST_Server::DELETABLE,
       'callback' => 'api_produto_delete',
+      'permission_callback' => function() {
+        return is_user_logged_in();
+      },
     ),
   ));
 }

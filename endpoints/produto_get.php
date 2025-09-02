@@ -96,7 +96,7 @@ function api_produto_get($request) {
       $referencia = get_post_meta($post_id, 'referencia', true);
       $descricao = get_post_meta($post_id, 'descricao', true);
       $cores = json_decode(get_post_meta($post_id, 'cores', true), true);
-      $imagens = json_decode(get_post_meta($post_id, 'cores', true), true);
+      $imagens = json_decode(get_post_meta($post_id, 'imagens', true), true);
       $categorias = get_post_meta($post_id, 'categorias', true);
       $informacoes_adicionais = get_post_meta($post_id, 'informacoes_adicionais', true);
       $preco = get_post_meta($post_id, 'preco', true);
@@ -107,7 +107,7 @@ function api_produto_get($request) {
         'id' => $post_id,
         'slug' => get_post_field('post_name', $post_id),
         'referencia' => $referencia,
-        'nome' => get_the_title(),
+        'nome' => get_the_title($post_id),
         'descricao' => $descricao,
         'cores' => $cores ?: array(),
         'imagens' => $imagens ?: array(),
@@ -116,22 +116,21 @@ function api_produto_get($request) {
         'preco' => floatval($preco),
         'vendido' => $vendido === 'true',
         'usuario_id' => $usuario_id,
-        'data_criacao' => get_the_date('c'),
-        'data_modificacao' => get_the_modified_date('c'),
+        'data_criacao' => get_the_date('c', $post_id),
+        'data_modificacao' => get_the_modified_date('c', $post_id),
         'autor' => array(
-          'id' => get_the_author_meta('ID'),
-          'nome' => get_the_author_meta('display_name'),
-          'email' => get_the_author_meta('user_email')
+          'id' => get_the_author_meta('ID', get_post_field('post_author', $post_id)),
+          'nome' => get_the_author_meta('display_name', get_post_field('post_author', $post_id)),
+          'email' => get_the_author_meta('user_email', get_post_field('post_author', $post_id))
         )
       );
 
       $produtos[] = $produto;
     }
+    wp_reset_postdata();
   }
 
-  wp_reset_postdata();
-
-  // Preparar resposta com metadados de paginação
+  // Informações de paginação
   $total_posts = $query->found_posts;
   $total_pages = ceil($total_posts / $per_page);
 
@@ -139,20 +138,9 @@ function api_produto_get($request) {
     'produtos' => $produtos,
     'paginacao' => array(
       'pagina_atual' => $page,
-      'por_pagina' => $per_page,
-      'total_produtos' => $total_posts,
       'total_paginas' => $total_pages,
-      'tem_proxima' => $page < $total_pages,
-      'tem_anterior' => $page > 1
-    ),
-    'filtros_aplicados' => array(
-      'search' => $search,
-      'categoria' => $categoria,
-      'preco_min' => $preco_min,
-      'preco_max' => $preco_max,
-      'status' => $status,
-      'ordenar_por' => $ordenar_por,
-      'ordem' => $ordem
+      'total_produtos' => $total_posts,
+      'produtos_por_pagina' => $per_page
     )
   );
 
@@ -160,14 +148,15 @@ function api_produto_get($request) {
 }
 
 function api_produto_get_single($request) {
-  $produto_id = $request['id'];
+  $id = $request['id'];
   
-  if (is_numeric($produto_id)) {
-    $post = get_post($produto_id);
-  } else {
-    $post = get_page_by_path($produto_id, OBJECT, 'produto');
+  // Buscar produto por ID ou slug
+  $post = get_page_by_path($id, OBJECT, 'produto');
+  
+  if (!$post) {
+    $post = get_post($id);
   }
-
+  
   if (!$post || $post->post_type !== 'produto') {
     return new WP_Error('produto_nao_encontrado', 'Produto não encontrado.', array('status' => 404));
   }
