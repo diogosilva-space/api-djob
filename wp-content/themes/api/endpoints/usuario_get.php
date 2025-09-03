@@ -1,6 +1,9 @@
 <?php
 
 function api_usuario_get($request) {
+
+  log_simple('🚀 ROTA ACESSADA: /wp-json/api/v1/usuario');
+
   $user = wp_get_current_user();
   $user_id = $user->ID;
 
@@ -44,7 +47,7 @@ function api_usuario_get($request) {
     ),
     'estatisticas' => array(
       'total_produtos' => count_user_posts($user_id, 'produto'),
-      'produtos_vendidos' => get_produtos_vendidos_count($user_id),
+
       'total_transacoes' => get_transacoes_count($user_id),
       'data_cadastro' => $user->user_registered
     )
@@ -53,26 +56,7 @@ function api_usuario_get($request) {
   return rest_ensure_response($response);
 }
 
-// Função auxiliar para contar produtos vendidos
-function get_produtos_vendidos_count($user_id) {
-  $args = array(
-    'post_type' => 'produto',
-    'post_status' => 'publish',
-    'author' => $user_id,
-    'meta_query' => array(
-      array(
-        'key' => 'vendido',
-        'value' => 'true',
-        'compare' => '='
-      )
-    ),
-    'posts_per_page' => -1,
-    'fields' => 'ids'
-  );
-  
-  $query = new WP_Query($args);
-  return $query->found_posts;
-}
+
 
 // Função auxiliar para contar transações
 function get_transacoes_count($user_id) {
@@ -107,9 +91,6 @@ function registrar_api_usuario_get() {
     array(
       'methods' => WP_REST_Server::READABLE,
       'callback' => 'api_usuario_get',
-      'permission_callback' => function() {
-        return is_user_logged_in();
-      },
       'args' => array(
         'campos' => array(
           'required' => false,

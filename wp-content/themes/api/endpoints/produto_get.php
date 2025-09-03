@@ -1,6 +1,9 @@
 <?php
 
 function api_produto_get($request) {
+
+  log_simple('🚀 ROTA ACESSADA: /wp-json/api/v1/produtos');
+
   // Parâmetros de paginação e filtros
   $page = isset($request['page']) ? intval($request['page']) : 1;
   $per_page = isset($request['per_page']) ? intval($request['per_page']) : 10;
@@ -8,10 +11,14 @@ function api_produto_get($request) {
   $categoria = isset($request['categoria']) ? sanitize_text_field($request['categoria']) : '';
   $preco_min = isset($request['preco_min']) ? floatval($request['preco_min']) : 0;
   $preco_max = isset($request['preco_max']) ? floatval($request['preco_max']) : 999999;
-  $status = isset($request['status']) ? sanitize_text_field($request['status']) : 'disponivel';
+
   $ordenar_por = isset($request['ordenar_por']) ? sanitize_text_field($request['ordenar_por']) : 'date';
   $ordem = isset($request['ordenar']) ? sanitize_text_field($request['ordenar']) : 'DESC';
   $referencia = isset($request['referencia']) ? sanitize_text_field($request['referencia']) : '';
+  
+  // Novos parâmetros de busca
+  $cores = isset($request['cores']) ? sanitize_text_field($request['cores']) : '';
+  $buscar_descricao = isset($request['buscar_descricao']) ? filter_var($request['buscar_descricao'], FILTER_VALIDATE_BOOLEAN) : false;
 
   // Construir query
   $args = array(
@@ -26,20 +33,7 @@ function api_produto_get($request) {
   // Meta query para filtros
   $meta_query = array('relation' => 'AND');
 
-  // Filtro por status de venda
-  if ($status === 'disponivel') {
-    $meta_query[] = array(
-      'key' => 'vendido',
-      'value' => 'false',
-      'compare' => '='
-    );
-  } elseif ($status === 'vendido') {
-    $meta_query[] = array(
-      'key' => 'vendido',
-      'value' => 'true',
-      'compare' => '='
-    );
-  }
+
 
   // Filtro por preço
   if ($preco_min > 0 || $preco_max < 999999) {
@@ -69,6 +63,15 @@ function api_produto_get($request) {
     );
   }
 
+  // Filtro por cores
+  if (!empty($cores)) {
+    $meta_query[] = array(
+      'key' => 'cores',
+      'value' => $cores,
+      'compare' => 'LIKE'
+    );
+  }
+
   if (count($meta_query) > 1) {
     $args['meta_query'] = $meta_query;
   }
@@ -76,6 +79,15 @@ function api_produto_get($request) {
   // Busca por texto
   if (!empty($search)) {
     $args['s'] = $search;
+    
+    // Se buscar_descricao for true, adicionar busca na descrição via meta_query
+    if ($buscar_descricao) {
+      $meta_query[] = array(
+        'key' => 'descricao',
+        'value' => $search,
+        'compare' => 'LIKE'
+      );
+    }
   }
 
   // Query personalizada para ordenação por preço
@@ -97,10 +109,10 @@ function api_produto_get($request) {
       $descricao = get_post_meta($post_id, 'descricao', true);
       $cores = json_decode(get_post_meta($post_id, 'cores', true), true);
       $imagens = json_decode(get_post_meta($post_id, 'imagens', true), true);
-      $categorias = get_post_meta($post_id, 'categorias', true);
+      $categorias = json_decode(get_post_meta($post_id, 'categorias', true), true);
       $informacoes_adicionais = get_post_meta($post_id, 'informacoes_adicionais', true);
       $preco = get_post_meta($post_id, 'preco', true);
-      $vendido = get_post_meta($post_id, 'vendido', true);
+
       $usuario_id = get_post_meta($post_id, 'usuario_id', true);
 
       $produto = array(
@@ -114,7 +126,7 @@ function api_produto_get($request) {
         'categorias' => $categorias,
         'informacoes_adicionais' => $informacoes_adicionais,
         'preco' => floatval($preco),
-        'vendido' => $vendido === 'true',
+
         'usuario_id' => $usuario_id,
         'data_criacao' => get_the_date('c', $post_id),
         'data_modificacao' => get_the_modified_date('c', $post_id),
@@ -147,17 +159,90 @@ function api_produto_get($request) {
   return rest_ensure_response($response);
 }
 
+// Função auxiliar para busca inteligente
+function buscar_produto_inteligente($busca) {
+  // 1. Tentar ID numérico
+  if (is_numeric($busca)) {
+    $post = get_post($busca);
+    if ($post && $post->post_type === 'produto') {
+      return $post;
+    }
+  }
+  
+  // 2. Tentar slug exato
+  $post = get_page_by_path($busca, OBJECT, 'produto');
+  if ($post) {
+    return $post;
+  }
+  
+  // 3. Tentar referência exata
+  $posts = get_posts(array(
+    'post_type' => 'produto',
+    'post_status' => 'publish',
+    'meta_query' => array(
+      array(
+        'key' => 'referencia',
+        'value' => $busca,
+        'compare' => '='
+      )
+    ),
+    'numberposts' => 1
+  ));
+  if (!empty($posts)) {
+    return $posts[0];
+  }
+  
+  // 4. Busca por palavras-chave (nome/slug)
+  $palavras = explode('-', $busca);
+  $search_terms = array();
+  
+  // Adicionar palavras individuais
+  foreach ($palavras as $palavra) {
+    if (strlen($palavra) > 2) { // Ignorar palavras muito curtas
+      $search_terms[] = $palavra;
+    }
+  }
+  
+  if (!empty($search_terms)) {
+    // Busca no título
+    $posts = get_posts(array(
+      'post_type' => 'produto',
+      'post_status' => 'publish',
+      's' => implode(' ', $search_terms),
+      'numberposts' => 1
+    ));
+    if (!empty($posts)) {
+      return $posts[0];
+    }
+    
+    // Busca por referência parcial
+    $posts = get_posts(array(
+      'post_type' => 'produto',
+      'post_status' => 'publish',
+      'meta_query' => array(
+        array(
+          'key' => 'referencia',
+          'value' => $busca,
+          'compare' => 'LIKE'
+        )
+      ),
+      'numberposts' => 1
+    ));
+    if (!empty($posts)) {
+      return $posts[0];
+    }
+  }
+  
+  return null;
+}
+
 function api_produto_get_single($request) {
   $id = $request['id'];
   
-  // Buscar produto por ID ou slug
-  $post = get_page_by_path($id, OBJECT, 'produto');
+  // Usar busca inteligente
+  $post = buscar_produto_inteligente($id);
   
   if (!$post) {
-    $post = get_post($id);
-  }
-  
-  if (!$post || $post->post_type !== 'produto') {
     return new WP_Error('produto_nao_encontrado', 'Produto não encontrado.', array('status' => 404));
   }
 
@@ -166,10 +251,10 @@ function api_produto_get_single($request) {
   $descricao = get_post_meta($post->ID, 'descricao', true);
   $cores = json_decode(get_post_meta($post->ID, 'cores', true), true);
   $imagens = json_decode(get_post_meta($post->ID, 'imagens', true), true);
-  $categorias = get_post_meta($post->ID, 'categorias', true);
+  $categorias = json_decode(get_post_meta($post->ID, 'categorias', true), true);
   $informacoes_adicionais = get_post_meta($post->ID, 'informacoes_adicionais', true);
   $preco = get_post_meta($post->ID, 'preco', true);
-  $vendido = get_post_meta($post->ID, 'vendido', true);
+
   $usuario_id = get_post_meta($post->ID, 'usuario_id', true);
 
   $produto = array(
@@ -183,7 +268,7 @@ function api_produto_get_single($request) {
     'categorias' => $categorias,
     'informacoes_adicionais' => $informacoes_adicionais,
     'preco' => floatval($preco),
-    'vendido' => $vendido === 'true',
+
     'usuario_id' => $usuario_id,
     'data_criacao' => get_the_date('c', $post->ID),
     'data_modificacao' => get_the_modified_date('c', $post->ID),
@@ -198,7 +283,6 @@ function api_produto_get_single($request) {
 }
 
 function registrar_api_produto_get() {
-  // Endpoint para listar produtos com filtros
   register_rest_route('api/v1', '/produtos', array(
     array(
       'methods' => WP_REST_Server::READABLE,
@@ -228,10 +312,7 @@ function registrar_api_produto_get() {
         'preco_max' => array(
           'sanitize_callback' => 'floatval'
         ),
-        'status' => array(
-          'default' => 'disponivel',
-          'enum' => array('disponivel', 'vendido', 'todos')
-        ),
+
         'ordenar_por' => array(
           'default' => 'date',
           'enum' => array('date', 'title', 'preco', 'referencia')
@@ -242,6 +323,13 @@ function registrar_api_produto_get() {
         ),
         'referencia' => array(
           'sanitize_callback' => 'sanitize_text_field'
+        ),
+        'cores' => array(
+          'sanitize_callback' => 'sanitize_text_field'
+        ),
+        'buscar_descricao' => array(
+          'default' => false,
+          'sanitize_callback' => 'rest_sanitize_boolean'
         )
       )
     ),

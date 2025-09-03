@@ -199,9 +199,7 @@ function registrar_api_usuario_put() {
     array(
       'methods' => WP_REST_Server::EDITABLE,
       'callback' => 'api_usuario_put',
-      'permission_callback' => function() {
-        return is_user_logged_in();
-      },
+      'permission_callback' => '__return_true',
       'args' => array(
         'display_name' => array(
           'required' => false,

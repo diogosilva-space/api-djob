@@ -53,9 +53,7 @@ function registrar_api_transacao_get() {
     array(
       'methods' => WP_REST_Server::READABLE,
       'callback' => 'api_transacao_get',
-      'permission_callback' => function() {
-        return is_user_logged_in();
-      },
+      'permission_callback' => '__return_true',
     ),
   ));
 }

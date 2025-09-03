@@ -225,57 +225,81 @@ function registrar_middleware_autenticacao() {
     add_filter('rest_pre_dispatch', function($result, $server, $request) {
         // Verificar se é uma requisição da API REST
         $route = $request->get_route();
+        $method = $request->get_method(); // GET, POST, PUT, DELETE, etc.
         
         // Se não é uma requisição da API, permitir acesso
         if (empty($route) || strpos($route, '/api/v1/') !== 0) {
             return $result;
         }
         
-        // Lista de endpoints que precisam de autenticação OBRIGATÓRIA
-        $endpoints_protegidos = array(
-            '/api/v1/produto',           // POST - Criar produto
-            '/api/v1/estatisticas',      // GET - Estatísticas
-            '/api/v1/transacao',         // POST/GET - Transações
-            '/api/v1/usuario'            // GET/PUT - Dados do usuário
+        // Configuração por ROTA + MÉTODO HTTP
+        $configuracao_rotas = array(
+            // Rota: /api/v1/produto
+            '/api/v1/produto' => array(
+                'GET' => 'publico',      // Buscar produto único - PÚBLICO
+                'POST' => 'protegido',   // Criar produto - PROTEGIDO
+                'PUT' => 'protegido',    // Atualizar produto - PROTEGIDO
+                'DELETE' => 'protegido'  // Deletar produto - PROTEGIDO
+            ),
+            
+            // Rota: /api/v1/produtos
+            '/api/v1/produtos' => array(
+                'GET' => 'publico'       // Listar produtos - PÚBLICO
+            ),
+            
+            // Rota: /api/v1/usuario
+            '/api/v1/usuario' => array(
+                'GET' => 'protegido',    // Dados do usuário - PROTEGIDO
+                'POST' => 'publico',     // Criar usuário - PÚBLICO
+                'PUT' => 'protegido'     // Atualizar usuário - PROTEGIDO
+            ),
+            
+            // Rota: /api/v1/usuario/login
+            '/api/v1/usuario/login' => array(
+                'POST' => 'publico'      // Login - PÚBLICO
+            ),
+            
+            // Rota: /api/v1/documentacao
+            '/api/v1/documentacao' => array(
+                'GET' => 'publico'       // Documentação - PÚBLICO
+            ),
+            
+            // Rota: /api/v1/estatisticas
+            '/api/v1/estatisticas' => array(
+                'GET' => 'protegido'     // Estatísticas - PROTEGIDO
+            ),
+            
+            // Rota: /api/v1/transacao
+            '/api/v1/transacao' => array(
+                'GET' => 'protegido',    // Listar transações - PROTEGIDO
+                'POST' => 'protegido'    // Criar transação - PROTEGIDO
+            )
         );
         
-        // Lista de endpoints PÚBLICOS (sem autenticação)
-        $endpoints_publicos = array(
-            '/api/v1/documentacao',      // GET - Documentação
-            '/api/v1/usuario/login',     // POST - Login
-            '/api/v1/usuario'            // POST - Criar usuário
-        );
-        
-        // Lista de endpoints que podem ser acessados com ou sem autenticação
-        $endpoints_opcionais = array(
-            '/api/v1/produtos'           // GET - Listar produtos (público)
-        );
-        
-        // Permitir acesso livre a endpoints públicos
-        foreach ($endpoints_publicos as $endpoint) {
-            if (strpos($route, $endpoint) === 0) {
-                return $result; // Permitir acesso livre
-            }
-        }
-        
-        // Permitir acesso livre a endpoints opcionais
-        foreach ($endpoints_opcionais as $endpoint) {
-            if (strpos($route, $endpoint) === 0) {
-                return $result; // Permitir acesso livre
-            }
-        }
-        
-        // Verificar autenticação apenas para endpoints protegidos
-        foreach ($endpoints_protegidos as $endpoint) {
-            if (strpos($route, $endpoint) === 0) {
-                $auth_result = middleware_autenticacao($request);
-                if (is_wp_error($auth_result)) {
-                    return $auth_result;
+        // Verificar se a rota está configurada
+        foreach ($configuracao_rotas as $rota_config => $metodos) {
+            if (strpos($route, $rota_config) === 0) {
+                // Verificar se o método está configurado para esta rota
+                if (isset($metodos[$method])) {
+                    $tipo_acesso = $metodos[$method];
+                    
+                    if ($tipo_acesso === 'publico') {
+                        // Permitir acesso livre
+                        return $result;
+                    } elseif ($tipo_acesso === 'protegido') {
+                        // Verificar autenticação
+                        $auth_result = middleware_autenticacao($request);
+                        if (is_wp_error($auth_result)) {
+                            return $auth_result;
+                        }
+                        return $result;
+                    }
                 }
                 break;
             }
         }
         
+        // Se não encontrou configuração específica, permitir acesso
         return $result;
     }, 10, 3);
 }

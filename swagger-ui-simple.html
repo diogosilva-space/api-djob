@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentação da API - Sistema de E-commerce</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui.css" />
+    <style>
+        html {
+            box-sizing: border-box;
+            overflow: -moz-scrollbars-vertical;
+            overflow-y: scroll;
+        }
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+        body {
+            margin:0;
+            background: #fafafa;
+        }
+        .swagger-ui .topbar {
+            background: #007cba;
+        }
+        .swagger-ui .topbar .download-url-wrapper {
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px;
+            text-align: center;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.10.3/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            // Mostrar loading
+            document.getElementById('swagger-ui').innerHTML = '<div style="text-align: center; padding: 50px; font-size: 18px; color: #666;">Carregando documentação da API...</div>';
+            
+            // Carregar especificação da API
+            fetch('http://localhost:8000/wp-json/api/v1/documentacao')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Endpoint de documentação não está funcionando');
+                    }
+                    return response.json();
+                })
+                .then(spec => {
+                    // Inicializar Swagger UI
+                    const ui = SwaggerUIBundle({
+                        spec: spec,
+                        dom_id: '#swagger-ui',
+                        deepLinking: true,
+                        presets: [
+                            SwaggerUIBundle.presets.apis,
+                            SwaggerUIStandalonePreset
+                        ],
+                        plugins: [
+                            SwaggerUIBundle.plugins.DownloadUrl
+                        ],
+                        layout: "StandaloneLayout",
+                        docExpansion: "list",
+                        defaultModelsExpandDepth: 1,
+                        defaultModelExpandDepth: 1,
+                        displayRequestDuration: true,
+                        filter: true,
+                        showExtensions: true,
+                        showCommonExtensions: true,
+                        tryItOutEnabled: true,
+                        requestInterceptor: function(request) {
+                            // Adicionar token JWT se disponível
+                            const token = localStorage.getItem('jwt_token');
+                            if (token) {
+                                request.headers.Authorization = 'Bearer ' + token;
+                            }
+                            return request;
+                        },
+                        responseInterceptor: function(response) {
+                            // Log das respostas para debug
+                            console.log('API Response:', response);
+                            return response;
+                        },
+                        onComplete: function() {
+                            // Personalizar após carregamento
+                            console.log('Swagger UI carregado com sucesso!');
+                            
+                            // Mostrar sucesso
+                            document.getElementById('swagger-ui').insertAdjacentHTML('afterbegin', `
+                                <div class="success">
+                                    <h3>✅ Swagger UI Carregado com Sucesso!</h3>
+                                    <p>A documentação interativa da API está funcionando perfeitamente.</p>
+                                    <p>Use a interface abaixo para testar os endpoints da API.</p>
+                                </div>
+                            `);
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar documentação:', error);
+                    document.getElementById('swagger-ui').innerHTML = `
+                        <div class="error">
+                            <h3>Erro ao carregar documentação</h3>
+                            <p>${error.message}</p>
+                            <p>Verifique se o endpoint <code>/wp-json/api/v1/documentacao</code> está funcionando.</p>
+                            <button onclick="location.reload()" style="padding: 10px 20px; background: #007cba; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                Tentar Novamente
+                            </button>
+                        </div>
+                    `;
+                });
+        };
+    </script>
+</body>
+</html>

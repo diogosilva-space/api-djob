@@ -26,11 +26,7 @@ function api_produto_put($request) {
     return new WP_Error('permissao', 'Você só pode editar seus próprios produtos.', array('status' => 403));
   }
 
-  // Verificar se o produto não foi vendido
-  $vendido = get_post_meta($post->ID, 'vendido', true);
-  if ($vendido === 'true') {
-    return new WP_Error('produto_vendido', 'Não é possível editar um produto vendido.', array('status' => 400));
-  }
+
 
   // Preparar dados para atualização
   $update_data = array(
@@ -168,7 +164,7 @@ function api_produto_put($request) {
   $categorias = get_post_meta($post->ID, 'categorias', true);
   $informacoes_adicionais = get_post_meta($post->ID, 'informacoes_adicionais', true);
   $preco = get_post_meta($post->ID, 'preco', true);
-  $vendido = get_post_meta($post->ID, 'vendido', true);
+
   $usuario_id = get_post_meta($post->ID, 'usuario_id', true);
 
   $produto_atualizado = array(
@@ -182,7 +178,7 @@ function api_produto_put($request) {
     'categorias' => $categorias,
     'informacoes_adicionais' => $informacoes_adicionais,
     'preco' => floatval($preco),
-    'vendido' => $vendido === 'true',
+
     'usuario_id' => $usuario_id,
     'data_criacao' => get_the_date('c', $post->ID),
     'data_modificacao' => get_the_modified_date('c', $post->ID),
@@ -207,9 +203,7 @@ function registrar_api_produto_put() {
     array(
       'methods' => WP_REST_Server::EDITABLE,
       'callback' => 'api_produto_put',
-      'permission_callback' => function() {
-        return is_user_logged_in();
-      },
+      'permission_callback' => '__return_true',
       'args' => array(
         'id' => array(
           'required' => true,

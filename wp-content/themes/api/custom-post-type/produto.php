@@ -66,16 +66,12 @@ function registrar_meta_produto() {
     'type' => 'number',
     'single' => true,
     'show_in_rest' => true,
-    'sanitize_callback' => 'floatval'
+    'sanitize_callback' => function($value) {
+      return floatval($value);
+    }
   ));
   
-  register_post_meta('produto', 'vendido', array(
-    'type' => 'string',
-    'single' => true,
-    'show_in_rest' => true,
-    'default' => 'false',
-    'sanitize_callback' => 'sanitize_text_field'
-  ));
+
   
   register_post_meta('produto', 'usuario_id', array(
     'type' => 'string',
@@ -95,7 +91,6 @@ function adicionar_colunas_produto($columns) {
       $new_columns['referencia'] = 'Referência';
       $new_columns['preco'] = 'Preço';
       $new_columns['categorias'] = 'Categorias';
-      $new_columns['status_venda'] = 'Status';
     }
   }
   return $new_columns;
@@ -114,10 +109,6 @@ function preencher_colunas_produto($column, $post_id) {
       break;
     case 'categorias':
       echo get_post_meta($post_id, 'categorias', true);
-      break;
-    case 'status_venda':
-      $vendido = get_post_meta($post_id, 'vendido', true);
-      echo $vendido === 'true' ? '<span style="color: red;">Vendido</span>' : '<span style="color: green;">Disponível</span>';
       break;
   }
 }

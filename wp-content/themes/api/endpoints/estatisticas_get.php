@@ -68,52 +68,25 @@ function get_estatisticas_produtos($user_id, $periodo) {
   $query = new WP_Query($args);
   $total_produtos = $query->found_posts;
   
-  // Produtos vendidos
-  $args_vendidos = $args;
-  $args_vendidos['meta_query'][] = array(
-    'key' => 'vendido',
-    'value' => 'true',
-    'compare' => '='
-  );
-  $query_vendidos = new WP_Query($args_vendidos);
-  $produtos_vendidos = $query_vendidos->found_posts;
-
-  // Produtos disponíveis
-  $args_disponiveis = $args;
-  $args_disponiveis['meta_query'][] = array(
-    'key' => 'vendido',
-    'value' => 'false',
-    'compare' => '='
-  );
-  $query_disponiveis = new WP_Query($args_disponiveis);
-  $produtos_disponiveis = $query_disponiveis->found_posts;
+  // Todos os produtos são considerados disponíveis
+  $produtos_disponiveis = $total_produtos;
 
   // Valor total dos produtos
   $valor_total = 0;
-  $valor_vendido = 0;
   
   if ($query->have_posts()) {
     while ($query->have_posts()) {
       $query->the_post();
       $preco = floatval(get_post_meta(get_the_ID(), 'preco', true));
-      $vendido = get_post_meta(get_the_ID(), 'vendido', true);
-      
       $valor_total += $preco;
-      if ($vendido === 'true') {
-        $valor_vendido += $preco;
-      }
     }
   }
   wp_reset_postdata();
 
   return array(
     'total_produtos' => $total_produtos,
-    'produtos_vendidos' => $produtos_vendidos,
     'produtos_disponiveis' => $produtos_disponiveis,
-    'taxa_venda' => $total_produtos > 0 ? round(($produtos_vendidos / $total_produtos) * 100, 2) : 0,
-    'valor_total' => $valor_total,
-    'valor_vendido' => $valor_vendido,
-    'valor_disponivel' => $valor_total - $valor_vendido
+    'valor_total' => $valor_total
   );
 }
 
@@ -200,12 +173,10 @@ function get_estatisticas_categorias($periodo) {
     SELECT 
       pm.meta_value as categoria,
       COUNT(*) as total_produtos,
-      SUM(CASE WHEN pm2.meta_value = 'true' THEN 1 ELSE 0 END) as produtos_vendidos,
-      AVG(CAST(pm3.meta_value AS DECIMAL(10,2))) as preco_medio
+      AVG(CAST(pm2.meta_value AS DECIMAL(10,2))) as preco_medio
     FROM {$wpdb->posts} p
     INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'categorias'
-    LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = 'vendido'
-    LEFT JOIN {$wpdb->postmeta} pm3 ON p.ID = pm3.post_id AND pm3.meta_key = 'preco'
+    LEFT JOIN {$wpdb->postmeta} pm2 ON p.ID = pm2.post_id AND pm2.meta_key = 'preco'
     WHERE p.post_type = 'produto' 
     AND p.post_status = 'publish'
     {$date_condition}
@@ -220,11 +191,7 @@ function get_estatisticas_categorias($periodo) {
     $categorias[] = array(
       'categoria' => $resultado->categoria,
       'total_produtos' => intval($resultado->total_produtos),
-      'produtos_vendidos' => intval($resultado->produtos_vendidos),
-      'produtos_disponiveis' => intval($resultado->total_produtos) - intval($resultado->produtos_vendidos),
-      'preco_medio' => floatval($resultado->preco_medio),
-      'taxa_venda' => $resultado->total_produtos > 0 ? 
-        round((intval($resultado->produtos_vendidos) / intval($resultado->total_produtos)) * 100, 2) : 0
+      'preco_medio' => floatval($resultado->preco_medio)
     );
   }
 
@@ -264,9 +231,7 @@ function registrar_api_estatisticas_get() {
     array(
       'methods' => WP_REST_Server::READABLE,
       'callback' => 'api_estatisticas_get',
-      'permission_callback' => function() {
-        return is_user_logged_in();
-      },
+      'permission_callback' => '__return_true',
       'args' => array(
         'tipo' => array(
           'default' => 'geral',

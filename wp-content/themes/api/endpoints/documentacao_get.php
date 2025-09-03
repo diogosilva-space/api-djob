@@ -7,8 +7,8 @@ function api_documentacao_get($request) {
     'openapi' => '3.0.0',
     'info' => array(
       'title' => 'API Sistema de E-commerce WordPress',
-      'description' => 'API REST completa para gerenciamento de usuários, produtos e transações',
-      'version' => '1.0.0',
+      'description' => 'API REST completa para gerenciamento de usuários, produtos e transações com funcionalidades avançadas de busca e categorização',
+      'version' => '2.0.0',
       'contact' => array(
         'name' => 'Suporte Técnico',
         'email' => 'suporte@exemplo.com'
@@ -163,8 +163,8 @@ function api_documentacao_get($request) {
       ),
       '/produtos' => array(
         'get' => array(
-          'summary' => 'Listar produtos',
-          'description' => 'Lista produtos com filtros e paginação',
+          'summary' => 'Listar produtos com busca avançada',
+          'description' => 'Lista produtos com filtros avançados, busca inteligente e paginação',
           'tags' => ['Produtos'],
           'parameters' => array(
             array(
@@ -182,7 +182,13 @@ function api_documentacao_get($request) {
             array(
               'name' => 'categoria',
               'in' => 'query',
-              'description' => 'Filtrar por categoria',
+              'description' => 'Filtrar por categoria específica',
+              'schema' => array('type' => 'string')
+            ),
+            array(
+              'name' => 'cores',
+              'in' => 'query',
+              'description' => 'Filtrar por cor específica',
               'schema' => array('type' => 'string')
             ),
             array(
@@ -200,8 +206,40 @@ function api_documentacao_get($request) {
             array(
               'name' => 'search',
               'in' => 'query',
-              'description' => 'Termo de busca',
+              'description' => 'Busca por palavras-chave no nome/slug',
               'schema' => array('type' => 'string')
+            ),
+            array(
+              'name' => 'referencia',
+              'in' => 'query',
+              'description' => 'Busca por referência específica',
+              'schema' => array('type' => 'string')
+            ),
+            array(
+              'name' => 'buscar_descricao',
+              'in' => 'query',
+              'description' => 'Incluir descrição na busca',
+              'schema' => array('type' => 'boolean', 'default' => false)
+            ),
+            array(
+              'name' => 'ordenar_por',
+              'in' => 'query',
+              'description' => 'Campo para ordenação',
+              'schema' => array(
+                'type' => 'string',
+                'enum' => ['data', 'nome', 'preco'],
+                'default' => 'data'
+              )
+            ),
+            array(
+              'name' => 'ordem',
+              'in' => 'query',
+              'description' => 'Direção da ordenação',
+              'schema' => array(
+                'type' => 'string',
+                'enum' => ['asc', 'desc'],
+                'default' => 'desc'
+              )
             )
           ),
           'responses' => array(
@@ -226,7 +264,7 @@ function api_documentacao_get($request) {
       '/produto' => array(
         'post' => array(
           'summary' => 'Criar produto',
-          'description' => 'Cria um novo produto no sistema',
+          'description' => 'Cria um novo produto no sistema com cores híbridas e categorias obrigatórias',
           'tags' => ['Produtos'],
           'security' => array(array('bearerAuth' => [])),
           'requestBody' => array(
@@ -235,15 +273,62 @@ function api_documentacao_get($request) {
               'multipart/form-data' => array(
                 'schema' => array(
                   'type' => 'object',
-                  'required' => ['referencia', 'nome', 'descricao', 'preco', 'categorias'],
+                  'required' => ['nome', 'referencia', 'descricao', 'imagens', 'cores', 'categorias'],
                   'properties' => array(
-                    'referencia' => array('type' => 'string'),
-                    'nome' => array('type' => 'string'),
-                    'descricao' => array('type' => 'string'),
-                    'preco' => array('type' => 'number'),
-                    'categorias' => array('type' => 'string'),
-                    'cores' => array('type' => 'array'),
-                    'imagens' => array('type' => 'array')
+                    'nome' => array(
+                      'type' => 'string',
+                      'description' => 'Nome do produto'
+                    ),
+                    'referencia' => array(
+                      'type' => 'string',
+                      'description' => 'Referência única do produto'
+                    ),
+                    'descricao' => array(
+                      'type' => 'string',
+                      'description' => 'Descrição detalhada do produto'
+                    ),
+                    'preco' => array(
+                      'type' => 'number',
+                      'format' => 'float',
+                      'description' => 'Preço do produto'
+                    ),
+                    'categorias' => array(
+                      'type' => 'array',
+                      'items' => array('type' => 'string'),
+                      'description' => 'Array de categorias (obrigatório, pelo menos uma)',
+                      'minItems' => 1
+                    ),
+                    'cores' => array(
+                      'type' => 'array',
+                      'items' => array(
+                        'type' => 'object',
+                        'required' => ['nome', 'tipo'],
+                        'properties' => array(
+                          'nome' => array('type' => 'string'),
+                          'tipo' => array(
+                            'type' => 'string',
+                            'enum' => ['imagem', 'codigo']
+                          ),
+                          'codigo' => array('type' => 'string'),
+                          'codigoNumerico' => array('type' => 'string')
+                        )
+                      ),
+                      'description' => 'Array de cores híbridas (obrigatório, pelo menos uma)',
+                      'minItems' => 1
+                    ),
+                    'imagens' => array(
+                      'type' => 'array',
+                      'items' => array(
+                        'type' => 'string',
+                        'format' => 'binary'
+                      ),
+                      'description' => 'Array de imagens do produto (obrigatório, pelo menos uma)',
+                      'minItems' => 1
+                    ),
+                    'informacoes_adicionais' => array(
+                      'type' => 'string',
+                      'description' => 'Informações adicionais do produto'
+                    )
                   )
                 )
               )
@@ -251,7 +336,113 @@ function api_documentacao_get($request) {
           ),
           'responses' => array(
             '201' => array(
-              'description' => 'Produto criado com sucesso'
+              'description' => 'Produto criado com sucesso',
+              'content' => array(
+                'application/json' => array(
+                  'schema' => array(
+                    'type' => 'object',
+                    'properties' => array(
+                      'id' => array('type' => 'integer'),
+                      'slug' => array('type' => 'string'),
+                      'status' => array('type' => 'string'),
+                      'message' => array('type' => 'string'),
+                      'imagens_enviadas' => array('type' => 'array'),
+                      'cores_processadas' => array('type' => 'array'),
+                      'categorias_processadas' => array('type' => 'array')
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
+      '/produto/{id}' => array(
+        'get' => array(
+          'summary' => 'Buscar produto por ID, slug, referência ou palavras-chave',
+          'description' => 'Busca inteligente de produto por múltiplos critérios',
+          'tags' => ['Produtos'],
+          'parameters' => array(
+            array(
+              'name' => 'id',
+              'in' => 'path',
+              'required' => true,
+              'description' => 'ID numérico, slug, referência ou palavras-chave',
+              'schema' => array('type' => 'string')
+            )
+          ),
+          'responses' => array(
+            '200' => array(
+              'description' => 'Produto encontrado',
+              'content' => array(
+                'application/json' => array(
+                  'schema' => array('$ref' => '#/components/schemas/Produto')
+                )
+              )
+            ),
+            '404' => array(
+              'description' => 'Produto não encontrado'
+            )
+          )
+        ),
+        'put' => array(
+          'summary' => 'Atualizar produto',
+          'description' => 'Atualiza dados de um produto existente',
+          'tags' => ['Produtos'],
+          'security' => array(array('bearerAuth' => [])),
+          'parameters' => array(
+            array(
+              'name' => 'id',
+              'in' => 'path',
+              'required' => true,
+              'schema' => array('type' => 'integer')
+            )
+          ),
+          'requestBody' => array(
+            'content' => array(
+              'application/json' => array(
+                'schema' => array(
+                  'type' => 'object',
+                  'properties' => array(
+                    'nome' => array('type' => 'string'),
+                    'referencia' => array('type' => 'string'),
+                    'descricao' => array('type' => 'string'),
+                    'preco' => array('type' => 'number'),
+                    'categorias' => array('type' => 'array'),
+                    'cores' => array('type' => 'array'),
+                    'informacoes_adicionais' => array('type' => 'string')
+                  )
+                )
+              )
+            )
+          ),
+          'responses' => array(
+            '200' => array(
+              'description' => 'Produto atualizado',
+              'content' => array(
+                'application/json' => array(
+                  'schema' => array('$ref' => '#/components/schemas/Produto')
+                )
+              )
+            )
+          )
+        ),
+        'delete' => array(
+          'summary' => 'Excluir produto',
+          'description' => 'Exclui um produto do sistema',
+          'tags' => ['Produtos'],
+          'security' => array(array('bearerAuth' => [])),
+          'parameters' => array(
+            array(
+              'name' => 'id',
+              'in' => 'path',
+              'required' => true,
+              'schema' => array('type' => 'integer')
+            )
+          ),
+          'responses' => array(
+            '200' => array(
+              'description' => 'Produto excluído com sucesso'
             )
           )
         )
@@ -331,23 +522,78 @@ function api_documentacao_get($request) {
           'type' => 'object',
           'properties' => array(
             'id' => array('type' => 'integer'),
+            'slug' => array('type' => 'string'),
             'referencia' => array('type' => 'string'),
             'nome' => array('type' => 'string'),
             'descricao' => array('type' => 'string'),
             'preco' => array('type' => 'number'),
-            'categorias' => array('type' => 'string'),
-            'cores' => array('type' => 'array'),
-            'imagens' => array('type' => 'array'),
-            'vendido' => array('type' => 'boolean')
+            'categorias' => array(
+              'type' => 'array',
+              'items' => array('type' => 'string'),
+              'description' => 'Array de categorias do produto'
+            ),
+            'cores' => array(
+              'type' => 'array',
+              'items' => array(
+                'type' => 'object',
+                'properties' => array(
+                  'nome' => array('type' => 'string'),
+                  'tipo' => array('type' => 'string'),
+                  'imagem' => array('type' => 'string'),
+                  'codigo' => array('type' => 'string'),
+                  'codigoNumerico' => array('type' => 'string')
+                )
+              ),
+              'description' => 'Array de cores híbridas (imagem ou código)'
+            ),
+            'imagens' => array(
+              'type' => 'array',
+              'items' => array('type' => 'string'),
+              'description' => 'Array de URLs das imagens'
+            ),
+            'informacoes_adicionais' => array('type' => 'string'),
+            'usuario_id' => array('type' => 'string'),
+            'data_criacao' => array('type' => 'string', 'format' => 'date-time'),
+            'data_modificacao' => array('type' => 'string', 'format' => 'date-time'),
+            'autor' => array(
+              'type' => 'object',
+              'properties' => array(
+                'id' => array('type' => 'integer'),
+                'nome' => array('type' => 'string'),
+                'email' => array('type' => 'string')
+              )
+            )
+          )
+        ),
+        'Paginacao' => array(
+          'type' => 'object',
+          'properties' => array(
+            'pagina_atual' => array('type' => 'integer'),
+            'total_paginas' => array('type' => 'integer'),
+            'total_produtos' => array('type' => 'integer'),
+            'produtos_por_pagina' => array('type' => 'integer')
+          )
+        ),
+        'Transacao' => array(
+          'type' => 'object',
+          'properties' => array(
+            'id' => array('type' => 'integer'),
+            'produto_id' => array('type' => 'integer'),
+            'quantidade' => array('type' => 'integer'),
+            'valor_total' => array('type' => 'number'),
+            'observacoes' => array('type' => 'string'),
+            'data_criacao' => array('type' => 'string', 'format' => 'date-time'),
+            'usuario_id' => array('type' => 'integer')
           )
         )
       )
     ),
     'tags' => array(
       array('name' => 'Usuários', 'description' => 'Operações relacionadas a usuários'),
-      array('name' => 'Autenticação', 'description' => 'Login e autenticação'),
-      array('name' => 'Produtos', 'description' => 'Gerenciamento de produtos'),
-      array('name' => 'Relatórios', 'description' => 'Estatísticas e relatórios')
+      array('name' => 'Autenticação', 'description' => 'Login e autenticação JWT'),
+      array('name' => 'Produtos', 'description' => 'Gerenciamento de produtos com busca inteligente'),
+      array('name' => 'Transações', 'description' => 'Gerenciamento de transações de compra'),
+      array('name' => 'Relatórios', 'description' => 'Estatísticas e relatórios do sistema')
     )
   );
 

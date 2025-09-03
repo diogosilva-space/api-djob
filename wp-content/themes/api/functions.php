@@ -1,8 +1,17 @@
 <?php
-// FUNCTIONS.PHP RESTAURADO - VERSÃO COMPLETA
-// Este arquivo contém a versão original que estava funcionando
-
 $template_diretorio = get_template_directory();
+
+// Configuração JWT - Definir constantes se não estiverem definidas
+if (!defined('JWT_AUTH_SECRET_KEY')) {
+    define('JWT_AUTH_SECRET_KEY', 'AQIRPKFTNKLAU8UzHtLCzGSWLV/0QgABha/y9/L9rrgLET/6cqxIPhPw6Denx+LVqPFon2OERn2QRyDEG8ZShg==');
+}
+
+if (!defined('JWT_AUTH_CORS_ENABLE')) {
+    define('JWT_AUTH_CORS_ENABLE', true);
+}
+
+// Incluir helpers de debug
+require_once($template_diretorio . "/debug-helpers.php");
 
 require_once($template_diretorio . "/custom-post-type/produto.php");
 require_once($template_diretorio . "/custom-post-type/transacao.php");
