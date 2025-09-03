@@ -1,0 +1,30 @@
+{
+  "name": "integracao-scraping-wordpress",
+  "version": "1.0.0",
+  "description": "Integração entre aplicação de scraping e API WordPress",
+  "main": "exemplo-integracao-scraping.js",
+  "scripts": {
+    "start": "node exemplo-integracao-scraping.js",
+    "test": "node test-integracao.js",
+    "dev": "nodemon exemplo-integracao-scraping.js"
+  },
+  "keywords": [
+    "scraping",
+    "wordpress",
+    "api",
+    "integration",
+    "nodejs"
+  ],
+  "author": "Seu Nome",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
