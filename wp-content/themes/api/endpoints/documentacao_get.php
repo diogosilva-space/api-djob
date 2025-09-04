@@ -447,6 +447,74 @@ function api_documentacao_get($request) {
           )
         )
       ),
+      '/categorias' => array(
+        'get' => array(
+          'summary' => 'Listar categorias de produtos',
+          'description' => 'Retorna todas as categorias disponíveis dos produtos com opções de contadores e preço médio',
+          'tags' => ['Produtos'],
+          'parameters' => array(
+            array(
+              'name' => 'incluir_contadores',
+              'in' => 'query',
+              'description' => 'Incluir contador de produtos por categoria',
+              'schema' => array('type' => 'boolean', 'default' => false)
+            ),
+            array(
+              'name' => 'incluir_preco_medio',
+              'in' => 'query',
+              'description' => 'Incluir preço médio por categoria',
+              'schema' => array('type' => 'boolean', 'default' => false)
+            ),
+            array(
+              'name' => 'ordenar_por',
+              'in' => 'query',
+              'description' => 'Campo para ordenação',
+              'schema' => array(
+                'type' => 'string',
+                'enum' => ['nome', 'total_produtos', 'preco_medio'],
+                'default' => 'nome'
+              )
+            ),
+            array(
+              'name' => 'ordenar',
+              'in' => 'query',
+              'description' => 'Direção da ordenação',
+              'schema' => array(
+                'type' => 'string',
+                'enum' => ['ASC', 'DESC'],
+                'default' => 'ASC'
+              )
+            )
+          ),
+          'responses' => array(
+            '200' => array(
+              'description' => 'Lista de categorias',
+              'content' => array(
+                'application/json' => array(
+                  'schema' => array(
+                    'type' => 'object',
+                    'properties' => array(
+                      'categorias' => array(
+                        'type' => 'array',
+                        'items' => array(
+                          'type' => 'object',
+                          'properties' => array(
+                            'categoria' => array('type' => 'string'),
+                            'total_produtos' => array('type' => 'integer'),
+                            'preco_medio' => array('type' => 'number')
+                          )
+                        )
+                      ),
+                      'total' => array('type' => 'integer'),
+                      'parametros' => array('type' => 'object')
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      ),
       '/estatisticas' => array(
         'get' => array(
           'summary' => 'Estatísticas e relatórios',

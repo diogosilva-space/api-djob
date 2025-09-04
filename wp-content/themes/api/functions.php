@@ -30,6 +30,7 @@ require_once($template_diretorio . "/endpoints/transacao_post.php");
 require_once($template_diretorio . "/endpoints/transacao_get.php");
 
 require_once($template_diretorio . "/endpoints/estatisticas_get.php");
+require_once($template_diretorio . "/endpoints/categorias_get.php");
 
 require_once($template_diretorio . "/endpoints/documentacao_get.php");
 
