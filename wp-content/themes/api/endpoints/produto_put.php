@@ -107,22 +107,87 @@ function api_produto_put($request) {
     $meta_updates['informacoes_adicionais'] = sanitize_textarea_field($request['informacoes_adicionais']);
   }
 
-  // Cores
-  if (isset($request['cores']) && is_array($request['cores'])) {
-    $cores = array();
-    foreach ($request['cores'] as $cor) {
-      $cores[] = array(
-        'nome' => sanitize_text_field($cor['nome']),
-        'imagem' => isset($cor['imagem']) ? esc_url_raw($cor['imagem']) : '',
-        'codigo' => isset($cor['codigo']) ? sanitize_text_field($cor['codigo']) : '',
-        'tipo' => sanitize_text_field($cor['tipo']),
-        'codigoNumerico' => sanitize_text_field($cor['codigoNumerico'])
-      );
+  // Cores - Processar cores com suporte a upload de imagens
+  if (isset($request['cores'])) {
+    $cores_processed = array();
+    $cores_param = $request->get_param('cores');
+    $files = $request->get_file_params();
+    
+    // Se cores vem como string JSON (multipart/form-data), decodificar
+    if (is_string($cores_param)) {
+      $cores_param = json_decode($cores_param, true);
     }
-    $meta_updates['cores'] = json_encode($cores, JSON_UNESCAPED_UNICODE);
+    
+    if (!empty($cores_param) && is_array($cores_param)) {
+      require_once(ABSPATH . 'wp-admin/includes/image.php');
+      require_once(ABSPATH . 'wp-admin/includes/file.php');
+      require_once(ABSPATH . 'wp-admin/includes/media.php');
+      
+      foreach ($cores_param as $index => $cor) {
+        $cor_processed = array(
+          'nome' => sanitize_text_field($cor['nome']),
+          'tipo' => sanitize_text_field($cor['tipo']),
+          'imagem' => '',
+          'codigo' => '',
+          'codigoNumerico' => ''
+        );
+        
+        if ($cor['tipo'] === 'imagem') {
+          // Processar upload de imagem da cor
+          $cor_file_key = "cores_imagem_{$index}";
+          if (!empty($files[$cor_file_key])) {
+            $file = $files[$cor_file_key];
+            
+            if ($file['error'] === UPLOAD_ERR_OK) {
+              $upload = wp_handle_upload($file, array(
+                'test_form' => false,
+                'mimes' => array(
+                  'jpg|jpeg|jpe' => 'image/jpeg',
+                  'gif' => 'image/gif',
+                  'png' => 'image/png',
+                  'webp' => 'image/webp'
+                )
+              ));
+              
+              if (!isset($upload['error']) && isset($upload['file'])) {
+                // Criar anexo na biblioteca de mídia
+                $attachment = array(
+                  'post_mime_type' => $upload['type'],
+                  'post_title' => sanitize_text_field($file['name']),
+                  'post_content' => 'Imagem da cor: ' . $cor_processed['nome'],
+                  'post_excerpt' => 'Imagem da cor ' . $cor_processed['nome'],
+                  'post_status' => 'inherit'
+                );
+                
+                $attachment_id = wp_insert_attachment($attachment, $upload['file']);
+                
+                if (!is_wp_error($attachment_id)) {
+                  // Gerar metadados do anexo
+                  $attach_data = wp_generate_attachment_metadata($attachment_id, $upload['file']);
+                  wp_update_attachment_metadata($attachment_id, $attach_data);
+                  
+                  $cor_processed['imagem'] = $upload['url'];
+                }
+              }
+            }
+          } else {
+            // Se não há arquivo novo, manter imagem existente se fornecida
+            $cor_processed['imagem'] = isset($cor['imagem']) ? esc_url_raw($cor['imagem']) : '';
+          }
+        } elseif ($cor['tipo'] === 'codigo') {
+          // Processar código de cor
+          $cor_processed['codigo'] = sanitize_text_field($cor['codigo']);
+          $cor_processed['codigoNumerico'] = isset($cor['codigoNumerico']) ? sanitize_text_field($cor['codigoNumerico']) : '';
+        }
+        
+        $cores_processed[] = $cor_processed;
+      }
+    }
+    
+    $meta_updates['cores'] = json_encode($cores_processed, JSON_UNESCAPED_UNICODE);
   }
 
-  // Imagens
+  // Imagens - Processar imagens do produto com suporte a upload
   if (isset($request['imagens']) && is_array($request['imagens'])) {
     $imagens = array();
     foreach ($request['imagens'] as $imagem) {
@@ -136,23 +201,110 @@ function api_produto_put($request) {
     update_post_meta($post->ID, $key, $value);
   }
 
-  // Processar upload de novas imagens se fornecidas
+  // Processar upload de novas imagens do produto se fornecidas
   $files = $request->get_file_params();
-  if($files) {
+  if (!empty($files['imagens'])) {
     require_once(ABSPATH . 'wp-admin/includes/image.php');
     require_once(ABSPATH . 'wp-admin/includes/file.php');
     require_once(ABSPATH . 'wp-admin/includes/media.php');
-
-    $imagens_upload = array();
-    foreach ($files as $file => $array) {
-      $attachment_id = media_handle_upload($file, $post->ID);
-      if (!is_wp_error($attachment_id)) {
-        $imagens_upload[] = wp_get_attachment_url($attachment_id);
+    
+    $imagens_urls = array();
+    $imagens_ids = array();
+    
+    // Verificar se é array múltiplo (múltiplos arquivos com mesmo nome)
+    if (is_array($files['imagens']['name'])) {
+      $file_count = count($files['imagens']['name']);
+      
+      for ($i = 0; $i < $file_count; $i++) {
+        // Verificar se o arquivo foi enviado corretamente
+        if ($files['imagens']['error'][$i] === UPLOAD_ERR_OK) {
+          $file = array(
+            'name' => $files['imagens']['name'][$i],
+            'type' => $files['imagens']['type'][$i],
+            'tmp_name' => $files['imagens']['tmp_name'][$i],
+            'error' => $files['imagens']['error'][$i],
+            'size' => $files['imagens']['size'][$i]
+          );
+          
+          // Usar wp_handle_upload para fazer o upload físico
+          $upload = wp_handle_upload($file, array(
+            'test_form' => false,
+            'mimes' => array(
+              'jpg|jpeg|jpe' => 'image/jpeg',
+              'gif' => 'image/gif',
+              'png' => 'image/png',
+              'webp' => 'image/webp'
+            )
+          ));
+          
+          if (!isset($upload['error']) && isset($upload['file'])) {
+            // Criar anexo na biblioteca de mídia
+            $attachment = array(
+              'post_mime_type' => $upload['type'],
+              'post_title' => sanitize_text_field($file['name']),
+              'post_content' => 'Imagem do produto: ' . get_the_title($post->ID),
+              'post_excerpt' => 'Imagem do produto ' . get_the_title($post->ID),
+              'post_status' => 'inherit'
+            );
+            
+            $attachment_id = wp_insert_attachment($attachment, $upload['file']);
+            
+            if (!is_wp_error($attachment_id)) {
+              // Gerar metadados do anexo
+              $attach_data = wp_generate_attachment_metadata($attachment_id, $upload['file']);
+              wp_update_attachment_metadata($attachment_id, $attach_data);
+              
+              $imagens_urls[] = $upload['url'];
+              $imagens_ids[] = $attachment_id;
+            }
+          }
+        }
+      }
+    } else {
+      // Apenas um arquivo
+      if ($files['imagens']['error'] === UPLOAD_ERR_OK) {
+        $upload = wp_handle_upload($files['imagens'], array(
+          'test_form' => false,
+          'mimes' => array(
+            'jpg|jpeg|jpe' => 'image/jpeg',
+            'gif' => 'image/gif',
+            'png' => 'image/png',
+            'webp' => 'image/webp'
+          )
+        ));
+        
+        if (!isset($upload['error']) && isset($upload['file'])) {
+          // Criar anexo na biblioteca de mídia
+          $attachment = array(
+            'post_mime_type' => $upload['type'],
+            'post_title' => sanitize_text_field($files['imagens']['name']),
+            'post_content' => 'Imagem do produto: ' . get_the_title($post->ID),
+            'post_excerpt' => 'Imagem do produto ' . get_the_title($post->ID),
+            'post_status' => 'inherit'
+          );
+          
+          $attachment_id = wp_insert_attachment($attachment, $upload['file']);
+          
+          if (!is_wp_error($attachment_id)) {
+            // Gerar metadados do anexo
+            $attach_data = wp_generate_attachment_metadata($attachment_id, $upload['file']);
+            wp_update_attachment_metadata($attachment_id, $attach_data);
+            
+            $imagens_urls[] = $upload['url'];
+            $imagens_ids[] = $attachment_id;
+          }
+        }
       }
     }
     
-    if (!empty($imagens_upload)) {
-      update_post_meta($post->ID, 'imagens_upload', json_encode($imagens_upload));
+    // Atualizar metadados com novas imagens se houver upload
+    if (!empty($imagens_urls)) {
+      // Combinar imagens existentes com novas
+      $imagens_existentes = json_decode(get_post_meta($post->ID, 'imagens', true), true) ?: array();
+      $imagens_combinadas = array_merge($imagens_existentes, $imagens_urls);
+      
+      update_post_meta($post->ID, 'imagens', json_encode($imagens_combinadas, JSON_UNESCAPED_UNICODE));
+      update_post_meta($post->ID, 'imagens_ids', json_encode($imagens_ids, JSON_UNESCAPED_UNICODE));
     }
   }
 
@@ -192,7 +344,9 @@ function api_produto_put($request) {
   $response = array(
     'status' => 'success',
     'message' => 'Produto atualizado com sucesso',
-    'produto' => $produto_atualizado
+    'produto' => $produto_atualizado,
+    'cores_processadas' => $cores_processed ?? array(),
+    'imagens_enviadas' => $imagens_urls ?? array()
   );
 
   return rest_ensure_response($response);
@@ -236,17 +390,18 @@ function registrar_api_produto_put() {
         ),
         'cores' => array(
           'required' => false,
-          'type' => 'array',
-          'items' => array(
-            'type' => 'object',
-            'properties' => array(
-              'nome' => array('type' => 'string'),
-              'imagem' => array('type' => 'string'),
-              'codigo' => array('type' => 'string'),
-              'tipo' => array('type' => 'string'),
-              'codigoNumerico' => array('type' => 'string')
-            )
-          )
+          'type' => array('string', 'array'),
+          'sanitize_callback' => function($param, $request, $key) {
+            // Se for string, retornar como está (será decodificado no processamento)
+            if (is_string($param)) {
+              return $param;
+            }
+            // Se for array, retornar como está
+            if (is_array($param)) {
+              return $param;
+            }
+            return null;
+          }
         ),
         'imagens' => array(
           'required' => false,

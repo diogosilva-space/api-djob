@@ -19,6 +19,12 @@ function api_produto_post($request) {
         } elseif ($campo === 'cores') {
             // Validação especial para cores (verificar se há cores enviadas)
             $cores_param = $request->get_param('cores');
+            
+            // Se cores vem como string JSON (multipart/form-data), decodificar
+            if (is_string($cores_param)) {
+                $cores_param = json_decode($cores_param, true);
+            }
+            
             if (empty($cores_param) || !is_array($cores_param)) {
                 return new WP_Error('campo_obrigatorio', "Campo '$campo' é obrigatório. É necessário enviar pelo menos uma cor.", array('status' => 400));
             }
@@ -71,6 +77,11 @@ function api_produto_post($request) {
     $cores_processed = array();
     $cores_param = $request->get_param('cores');
     $files = $request->get_file_params();
+    
+    // Se cores vem como string JSON (multipart/form-data), decodificar
+    if (is_string($cores_param)) {
+        $cores_param = json_decode($cores_param, true);
+    }
     
     if (!empty($cores_param) && is_array($cores_param)) {
         require_once(ABSPATH . 'wp-admin/includes/image.php');
@@ -344,19 +355,29 @@ function registrar_api_produto_post() {
                 ),
                 'cores' => array(
                     'required' => true,
-                    'type' => 'array',
-                    'items' => array(
-                        'type' => 'object',
-                        'properties' => array(
-                            'nome' => array('type' => 'string'),
-                            'tipo' => array('type' => 'string', 'enum' => ['imagem', 'codigo']),
-                            'codigo' => array('type' => 'string'),
-                            'codigoNumerico' => array('type' => 'string')
-                        ),
-                        'required' => ['nome', 'tipo']
-                    ),
+                    'type' => array('string', 'array'),
+                    'sanitize_callback' => function($param, $request, $key) {
+                        // Se for string, retornar como está (será decodificado no processamento)
+                        if (is_string($param)) {
+                            return $param;
+                        }
+                        // Se for array, retornar como está
+                        if (is_array($param)) {
+                            return $param;
+                        }
+                        return null;
+                    },
                     'validate_callback' => function($param, $request, $key) {
-                        return is_array($param) && !empty($param);
+                        // Se for string, tentar decodificar JSON
+                        if (is_string($param)) {
+                            $decoded = json_decode($param, true);
+                            return is_array($decoded) && !empty($decoded);
+                        }
+                        // Se for array, validar diretamente
+                        if (is_array($param)) {
+                            return !empty($param);
+                        }
+                        return false;
                     }
                 ),
                 'informacoes_adicionais' => array(
